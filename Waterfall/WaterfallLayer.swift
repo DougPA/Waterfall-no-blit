@@ -33,19 +33,7 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     //  outside of the 0.0 to 1.0 range are ignored).
     //
     
-    struct Vertex {
-        var coord                                   : float2                // waterfall coordinates
-        var texCoord                                : float2                // texture coordinates
-    }
     
-    // ----------------------------------------------------------------------------
-    // MARK: - Public properties
-    
-    var updateNeeded                                = true                  // true == recalc texture coords
-    
-    // ----------------------------------------------------------------------------
-    // MARK: - Private properties    
-
     //  Vertices    v1  (-1, 1)     |     ( 1, 1)  v3       Texture     v1  ( 0, 0) |---------  ( 1, 0)  v3
     //  (-1 to +1)                  |                       (0 to 1)                |
     //                          ----|----                                           |
@@ -54,6 +42,8 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     //
     //  NOTE:   texture coords are recalculated based on screen size and startingBin / endingBin
     //
+    
+    
     //      Screen                                              Texture
     //  ------------------   ^                      ---------------------------------   ^
     //  |                |   |                      |                               |   |
@@ -73,6 +63,19 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     //                                                      |                 |
     //                                                  startingBin         EndingBin
     //
+    
+    // ----------------------------------------------------------------------------
+    // MARK: - Public properties
+    
+    var updateNeeded                                = true                  // true == recalc texture coords
+
+    struct Vertex {
+        var coord                                   : float2                // waterfall coordinates
+        var texCoord                                : float2                // texture coordinates
+    }
+    
+    // ----------------------------------------------------------------------------
+    // MARK: - Private properties
     
     fileprivate var _waterfallVertices              : [Vertex] = [
         Vertex(coord: float2(-1.0, -1.0), texCoord: float2( 0.0, 1.0)),     // v0 - bottom left
