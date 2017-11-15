@@ -385,28 +385,25 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
             updateNeeded = false
             
             // set the texture left edge (in clip space, i.e. 0.0 to 1.0)
-            let leftSide = Float(WaterfallLayer.kStartingBin) / Float(WaterfallLayer.kTextureWidth)
-            _waterfallVertices[0].texCoord.x = leftSide                     // bottom
-            _waterfallVertices[1].texCoord.x = leftSide                     // top
+            let leftSide = Float(WaterfallLayer.kStartingBin) / Float(WaterfallLayer.kTextureWidth - 1)
+            _waterfallVertices[0].texCoord.x = leftSide                     // bottom left x
+            _waterfallVertices[1].texCoord.x = leftSide                     // top left x
             
             // set the texture right edge (in clip space, i.e. 0.0 to 1.0)
-            let rightSide = Float(WaterfallLayer.kEndingBin) / Float(WaterfallLayer.kTextureWidth)
-            _waterfallVertices[2].texCoord.x = rightSide                    // bottom
-            _waterfallVertices[3].texCoord.x = rightSide                    // top
+            let rightSide = Float(WaterfallLayer.kEndingBin) / Float(WaterfallLayer.kTextureWidth - 1)
+            _waterfallVertices[2].texCoord.x = rightSide                    // bottom right x
+            _waterfallVertices[3].texCoord.x = rightSide                    // top right x
         }
         
         // set y coordinates of the top of the texture
-        let yOffset = Float(_textureIndex) / Float(WaterfallLayer.kTextureHeight)
-        _waterfallVertices[3].texCoord.y = yOffset                          // top right y
-        _waterfallVertices[1].texCoord.y = yOffset                          // top left y
+        let topSide = Float(_textureIndex) / Float(WaterfallLayer.kTextureHeight - 1)
+        _waterfallVertices[3].texCoord.y = topSide                          // top right y
+        _waterfallVertices[1].texCoord.y = topSide                          // top left y
         
         // set y coordinates of the bottom of the texture
-        let heightPercent = Float(frame.height) / Float(WaterfallLayer.kTextureHeight)
-        _waterfallVertices[2].texCoord.y = yOffset + heightPercent      // bottom right y
-        _waterfallVertices[0].texCoord.y = yOffset + heightPercent      // bottom left y
-        
-        Swift.print("tex coords, top = \(_waterfallVertices[1].texCoord.y)   " +
-            "bottom = \(_waterfallVertices[0].texCoord.y)   ")
+        let bottomSide = topSide + Float(frame.height) / Float(WaterfallLayer.kTextureHeight - 1)
+        _waterfallVertices[2].texCoord.y = bottomSide                       // bottom right y
+        _waterfallVertices[0].texCoord.y = bottomSide                       // bottom left y
         
         // get a pointer to the line of data (intensities)
         let currentLine = ( _lineIndex == 0 ? _line0 : _line1 )
@@ -415,8 +412,6 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         // copy the data (intensities) into the texture
         let region = MTLRegionMake2D(0, _textureIndex, WaterfallLayer.kNumberOfBins, 1)
         _intensityTexture!.replace(region: region, mipmapLevel: 0, withBytes: uint8Ptr, bytesPerRow: WaterfallLayer.kTextureWidth * MemoryLayout<UInt16>.size)
-        
-        Swift.print("lineIndex = \(_lineIndex), textureIndex = \(_textureIndex)\n")
         
         // toggle the Line index
         _lineIndex = (_lineIndex + 1) % 2
