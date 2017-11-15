@@ -54,6 +54,26 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     //
     //  NOTE:   texture coords are recalculated based on screen size and startingBin / endingBin
     //
+    //      Screen                                              Texture
+    //  ------------------   ^                      ---------------------------------   ^
+    //  |                |   |                      |                               |   |
+    //  |                |   | frameHeight          |                               |   |
+    //  |                |   |                      |                               |   |
+    //  |                |   |          topIndex->  |       ------------------      |   | textureHeight
+    //  |                |   |                      |              ^                |   |
+    //  ------------------   V                      |              |                |   |
+    //                                              |              | frameHeight    |   |
+    //                                              |              |                |   |
+    //                                              |              V                |   |
+    //                               bottomIndex->  |       ------------------      |   |
+    //                                              |                               |   |
+    //                                              |                               |   |
+    //                                              ---------------------------------   V
+    //                                                      ^                 ^
+    //                                                      |                 |
+    //                                                  startingBin         EndingBin
+    //
+    
     fileprivate var _waterfallVertices              : [Vertex] = [
         Vertex(coord: float2(-1.0, -1.0), texCoord: float2( 0.0, 1.0)),     // v0 - bottom left
         Vertex(coord: float2(-1.0,  1.0), texCoord: float2( 0.0, 0.0)),     // v1 - top    left
