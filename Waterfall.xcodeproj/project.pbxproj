@@ -26,7 +26,6 @@
 		913F28AA1F8D1DBB00E8FEEA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		913F28AD1F8D1DBB00E8FEEA /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		913F28AF1F8D1DBB00E8FEEA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		913F28B01F8D1DBB00E8FEEA /* Waterfall.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Waterfall.entitlements; sourceTree = "<group>"; };
 		913F28B61F8D1DFA00E8FEEA /* WaterfallViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WaterfallViewController.swift; sourceTree = "<group>"; };
 		913F28B81F8D1E6500E8FEEA /* WaterfallShaders.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = WaterfallShaders.metal; sourceTree = "<group>"; };
 		913F28B91F8D1E6500E8FEEA /* WaterfallView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WaterfallView.swift; sourceTree = "<group>"; };
@@ -69,7 +68,6 @@
 				913F28AA1F8D1DBB00E8FEEA /* Assets.xcassets */,
 				913F28AF1F8D1DBB00E8FEEA /* Info.plist */,
 				913F28AC1F8D1DBB00E8FEEA /* Main.storyboard */,
-				913F28B01F8D1DBB00E8FEEA /* Waterfall.entitlements */,
 				913F28BA1F8D1E6500E8FEEA /* WaterfallLayer.swift */,
 				913F28B81F8D1E6500E8FEEA /* WaterfallShaders.metal */,
 				913F28B91F8D1E6500E8FEEA /* WaterfallView.swift */,
@@ -89,6 +87,7 @@
 				913F289F1F8D1DBB00E8FEEA /* Sources */,
 				913F28A01F8D1DBB00E8FEEA /* Frameworks */,
 				913F28A11F8D1DBB00E8FEEA /* Resources */,
+				91657BDF1FBBE51A00DED57A /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -149,6 +148,19 @@
 
 /* Begin PBXShellScriptBuildPhase section */
 		91657BDE1FBB60C700DED57A /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "buildNumber=$(/usr/libexec/PlistBuddy -c \"Print CFBundleVersion\" \"${PROJECT_DIR}/${INFOPLIST_FILE}\")\nbuildNumber=$(($buildNumber + 1))\n/usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $buildNumber\" \"${PROJECT_DIR}/${INFOPLIST_FILE}\"";
+		};
+		91657BDF1FBBE51A00DED57A /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -300,7 +312,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Waterfall/Waterfall.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Waterfall/Info.plist;
@@ -316,7 +328,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Waterfall/Waterfall.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = Waterfall/Info.plist;
