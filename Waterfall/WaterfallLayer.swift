@@ -26,11 +26,11 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     //  is superimposed over that rectangle.
     //
     //  The _drawTexture is used in a way that simulates scrolling so that the waterfall
-    //  scrolls down.
+    //  scrolls down. The texture is configured to wrap (top to bottom).
     //
     //  All of the incoming intensity values are processed but only the visible portion is
-    //  displayed because of the clip space conversion (texture values with coordinates outside
-    //  of the -1 to +1 range are ignored).
+    //  displayed because of the clip space conversion (texture values with coordinates
+    //  outside of the 0.0 to 1.0 range are ignored).
     //
     
     struct Vertex {

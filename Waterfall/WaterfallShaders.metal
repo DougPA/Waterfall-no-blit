@@ -46,7 +46,7 @@ kernel void convert(texture2d<ushort, access::read> inTexture [[texture(0)]],
 // MARK: - Vertex & Fragment shaders for Waterfall draw calls
 // --------------------------------------------------------------------------------
 
-struct Vertex {
+struct Vertex {         
     float2  coord;                      // waterfall coordinates
     float2  texCoord;                   // texture coordinates
 };
