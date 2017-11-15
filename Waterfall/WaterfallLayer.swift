@@ -93,7 +93,7 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
 
     // statics, values chosen to accomodate the lrgest possible waterfall
     static let kTextureWidth                        = 3360                  // must be >= max number of Bins
-    static let kTextureHeight                       = 1024                  // must be >= max number of lines
+    static let kTextureHeight                       = 2048                  // must be >= max number of lines
     
     // static, arbitrary choice of a reasonable number of color gradations for the waterfall
     static let kGradientSize                        = 256                   // number of colors in a gradient
@@ -386,24 +386,26 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
             
             // set the texture left edge (in clip space, i.e. 0.0 to 1.0)
             let leftSide = Float(WaterfallLayer.kStartingBin) / Float(WaterfallLayer.kTextureWidth - 1)
-            _waterfallVertices[0].texCoord.x = leftSide                     // bottom left x
-            _waterfallVertices[1].texCoord.x = leftSide                     // top left x
+            _waterfallVertices[0].texCoord.x = leftSide                     // clip space value for bottom left x
+            _waterfallVertices[1].texCoord.x = leftSide                     // clip space value for top left x
             
             // set the texture right edge (in clip space, i.e. 0.0 to 1.0)
             let rightSide = Float(WaterfallLayer.kEndingBin) / Float(WaterfallLayer.kTextureWidth - 1)
-            _waterfallVertices[2].texCoord.x = rightSide                    // bottom right x
-            _waterfallVertices[3].texCoord.x = rightSide                    // top right x
+            _waterfallVertices[2].texCoord.x = rightSide                    // clip space value for bottom right x
+            _waterfallVertices[3].texCoord.x = rightSide                    // clip space value for top right x
         }
         
-        // set y coordinates of the top of the texture
-        let topSide = Float(_textureIndex) / Float(WaterfallLayer.kTextureHeight - 1)
-        _waterfallVertices[3].texCoord.y = topSide                          // top right y
-        _waterfallVertices[1].texCoord.y = topSide                          // top left y
+        // set y coordinates of the top of the texture (in clip space, i.e. 0.0 to 1.0)
+        let topIndex = Float(_textureIndex)                                 // index into texture
+        let topSide = topIndex / Float(WaterfallLayer.kTextureHeight - 1)   // clip space value for index
+        _waterfallVertices[3].texCoord.y = topSide                          // clip space value for top right y
+        _waterfallVertices[1].texCoord.y = topSide                          // clip space value for top left y
         
-        // set y coordinates of the bottom of the texture
-        let bottomSide = topSide + Float(frame.height) / Float(WaterfallLayer.kTextureHeight - 1)
-        _waterfallVertices[2].texCoord.y = bottomSide                       // bottom right y
-        _waterfallVertices[0].texCoord.y = bottomSide                       // bottom left y
+        // set y coordinates of the bottom of the texture (in clip space, i.e. 0.0 to 1.0)
+        let bottomIndex = Float(_textureIndex) + Float(frame.height - 1)    // index into texture
+        let bottomSide = bottomIndex / Float(WaterfallLayer.kTextureHeight - 1) // clip space value for index
+        _waterfallVertices[2].texCoord.y = bottomSide                       // clip space value for bottom right y
+        _waterfallVertices[0].texCoord.y = bottomSide                       // clip space value for bottom left y
         
         // get a pointer to the line of data (intensities)
         let currentLine = ( _lineIndex == 0 ? _line0 : _line1 )

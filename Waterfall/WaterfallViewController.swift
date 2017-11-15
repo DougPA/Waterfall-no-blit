@@ -85,7 +85,7 @@ class WaterfallViewController: NSViewController {
     // ----------------------------------------------------------------------------
     // MARK: - Private methods
     
-    /// Simulate waterfall stream handler at 100 ms interval
+    /// Simulate waterfall stream handler at 16.7 ms interval
     ///
     private func setupTimer() {
         
@@ -93,7 +93,7 @@ class WaterfallViewController: NSViewController {
         _streamTimer = DispatchSource.makeTimerSource(flags: [.strict], queue: _udpReceiveQ)
         
         // start the timer
-        _streamTimer.schedule(deadline: DispatchTime.now(), repeating: .milliseconds(100), leeway: .milliseconds(10))      // Every 100ms +/- 10%
+        _streamTimer.schedule(deadline: DispatchTime.now(), repeating: .milliseconds(20), leeway: .milliseconds(1))      // Every 100ms +/- 10%
         
         _streamTimer.resume()
         
