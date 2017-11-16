@@ -93,7 +93,7 @@ class WaterfallViewController: NSViewController {
         _streamTimer = DispatchSource.makeTimerSource(flags: [.strict], queue: _udpReceiveQ)
         
         // start the timer
-        _streamTimer.schedule(deadline: DispatchTime.now(), repeating: .milliseconds(20), leeway: .milliseconds(1))
+        _streamTimer.schedule(deadline: DispatchTime.now(), repeating: .milliseconds(10), leeway: .milliseconds(1))
         
         _streamTimer.resume()
         

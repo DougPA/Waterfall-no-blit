@@ -36,7 +36,7 @@ final public class WaterfallView: NSView, CALayerDelegate {
     public override func awakeFromNib() {
         super.awakeFromNib()
         
-        createLayers()        
+        createLayers()
     }
     
     // ----------------------------------------------------------------------------
@@ -61,17 +61,11 @@ final public class WaterfallView: NSView, CALayerDelegate {
         rootLayer.name = kRootLayer
         rootLayer.layoutManager = CAConstraintLayoutManager()
         rootLayer.frame = frame
-        layerUsesCoreImageFilters = true
         
         // make this a layer-hosting view
         layer = rootLayer
         wantsLayer = true
         
-        // select a compositing filter
-        // possible choices - CIExclusionBlendMode, CIDifferenceBlendMode, CIMaximumCompositing
-        guard let compositingFilter = CIFilter(name: "CIDifferenceBlendMode") else {
-            fatalError("Unable to create compositing filter")
-        }
         // ***** Waterfall layer *****
         waterfallLayer = WaterfallLayer()
         

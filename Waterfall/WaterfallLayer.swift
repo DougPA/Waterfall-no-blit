@@ -86,6 +86,8 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     fileprivate var _waterfallPipelineState         : MTLRenderPipelineState!   // render pipeline state
     fileprivate var _computePipelineState           : MTLComputePipelineState!  // compute pipeline state
 
+    fileprivate var _waterfallVerticesBuffer        : MTLBuffer!            // vertices buffer
+    fileprivate var _waterfallVerticesBuffers       = [MTLBuffer]()         // triple buffer array
     fileprivate var _drawTexture                    : MTLTexture!           // overlay on waterfall draw
     fileprivate var _gradientTexture                : MTLTexture!           // color gradient
     fileprivate var _intensityTexture               : MTLTexture!           // intensities
@@ -94,30 +96,28 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     fileprivate var _commandQueue                   : MTLCommandQueue!      // Metal queue
     fileprivate var _clearColor                     : MTLClearColor?        // Metal clear color
 
-    // arbitrary choice - may be tunable to improve performance on varios Mac hardware
-    let _threadGroupCount = MTLSizeMake(16, 16, 1)
+    // arbitrary choice - may be tunable to improve performance on various Mac hardware
+    let _threadGroupCount = MTLSizeMake(16, 16, 1)                          // parameters for GPU compute
     lazy var _threadGroups: MTLSize = {
         MTLSizeMake(WaterfallLayer.kTextureWidth / self._threadGroupCount.width, WaterfallLayer.kTextureHeight / self._threadGroupCount.height, 1)
     }()
 
-    fileprivate var _textureIndex                   = 0                     // currentLine in _drawTexture
-    fileprivate var _lineIndex                      = 0                     // 0 == Line 0, 1 == Line 1
-    fileprivate var _frameHeight                    : CGFloat = 0.0         // height of the layer
-    fileprivate var _stepValue                      =                       // texture clip space between lines
-        1.0 / Float(WaterfallLayer.kTextureHeight)
-
-    var _line0 = [UInt16](repeating: 0, count: WaterfallLayer.kTextureWidth) // line of intensity values
-    var _line1 = [UInt16](repeating: 0, count: WaterfallLayer.kTextureWidth) // line of intensity values
+    fileprivate var _bufferIndex                    = 0                     // current Vertices buffer #
+    fileprivate var _textureTopLine                 = 0                     // current top Line in _drawTexture
+    fileprivate var _intensityValues                =                       // line of intensity values
+        [UInt16](repeating: 0, count: WaterfallLayer.kTextureWidth)
 
     // constants
     fileprivate let kWaterfallVertex                = "waterfall_vertex"    // name of waterfall vertex function
     fileprivate let kWaterfallFragment              = "waterfall_fragment"  // name of waterfall fragment function
     fileprivate let kComputeGradient                = "convert"             // name of waterfall kernel function
 
-    // statics, values chosen to accomodate the lrgest possible waterfall
+    // statics, values chosen to accomodate the largest possible waterfall
     static let kTextureWidth                        = 3360                  // must be >= max number of Bins
     static let kTextureHeight                       = 2048                  // must be >= max number of lines
-    
+    static let kMaxBuffers                          = 3                     // number of Waterfall Vertices buffers
+    static let kMaxTextures                         = 3                     // number of Intensity textures
+
     // static, arbitrary choice of a reasonable number of color gradations for the waterfall
     static let kGradientSize                        = 256                   // number of colors in a gradient
 
@@ -127,18 +127,39 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
     static let kNumberOfBins                        = 2048                  // number of stream samples
     static let kStartingBin                         = (kNumberOfBins -  kFrameWidth)  / 2   // first bin on screen
     static let kEndingBin                           = (kNumberOfBins - 1 - kStartingBin)    // last bin on screen
+    
+    
+    fileprivate var _bufferSemaphore                = DispatchSemaphore(value: WaterfallLayer.kMaxBuffers)
 
     // ----------------------------------------------------------------------------
     // MARK: - Public methods
     
-    /// Draw in a Metal layer
+    
+    /// Populate the Vertex buffer and the Intensity texture
     ///
-    public func render() {
+    fileprivate func populateBuffers() {
+
+        // wait for an available buffer
+        _bufferSemaphore.wait()
         
-        // ----- use the GPU to convert the intensities to gradient colors -----
+        // increment the buffer index
+        _bufferIndex = (_bufferIndex + 1) % WaterfallLayer.kMaxBuffers
+        
+        // copy the Vertices to the current buffer
+        _waterfallVerticesBuffers[_bufferIndex].contents().copyBytes(from: _waterfallVertices, count: _waterfallVertices.count * MemoryLayout<Vertex>.stride)
+        
+        // copy the data (intensities) into the texture
+        let uint8Ptr = UnsafeRawPointer(_intensityValues).bindMemory(to: UInt8.self, capacity: WaterfallLayer.kNumberOfBins * MemoryLayout<UInt16>.size)
+        let region = MTLRegionMake2D(0, _textureTopLine, WaterfallLayer.kNumberOfBins, 1)
+        _intensityTexture!.replace(region: region, mipmapLevel: 0, withBytes: uint8Ptr, bytesPerRow: WaterfallLayer.kTextureWidth * MemoryLayout<UInt16>.size)
+    }
+    
+    /// Convert Intensities to colors using a gradient
+    ///
+    func convertIntensity() {
         
         // create a command buffer
-        var cmdBuffer = _commandQueue.makeCommandBuffer()!
+        let cmdBuffer = _commandQueue.makeCommandBuffer()!
         cmdBuffer.label = "Compute buffer"
         
         // create a Compute encoder
@@ -152,16 +173,16 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         
         // choose and bind the input Texture
         computeEncoder.setTexture(_intensityTexture, index: 0)
-
+        
         // bind the output Texture
         computeEncoder.setTexture(_drawTexture, index: 1)
         
         // bind the Gradient texture
         computeEncoder.setTexture(_gradientTexture, index: 2)
-
+        
         // bind the sampler state for the Gradient
         computeEncoder.setSamplerState(_gradientSamplerState, index: 0)
-
+        
         // perform the computation
         computeEncoder.dispatchThreadgroups(_threadGroups, threadsPerThreadgroup: _threadGroupCount)
         
@@ -174,35 +195,41 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         cmdBuffer.commit()
         cmdBuffer.waitUntilCompleted()
 
-        // ----- prepare to draw -----
-
+    }
+    /// Draw a rectangle over the Waterfall area and texture it with the converted Intensities
+    ///
+    func draw() {
+        
         // obtain a drawable
-        guard let drawable = nextDrawable() else { return }
+        guard let drawable = nextDrawable() else {
+            
+            Swift.print("No drawable")
+            return
+            
+        }
         
         // create another command buffer
-        cmdBuffer = _commandQueue.makeCommandBuffer()!
+        let cmdBuffer = _commandQueue.makeCommandBuffer()!
         cmdBuffer.label = "Render buffer"
         
         // create a render pass descriptor
         let renderPassDesc = MTLRenderPassDescriptor()
         renderPassDesc.colorAttachments[0].texture = drawable.texture
         renderPassDesc.colorAttachments[0].loadAction = .clear
+        renderPassDesc.colorAttachments[0].clearColor = _clearColor!
         
-        // ----- use the GPU to draw the triangles overlaid with the current texture -----
-
         // create a Render encoder
         let renderEncoder = cmdBuffer.makeRenderCommandEncoder(descriptor: renderPassDesc)!
         renderEncoder.label = "Render encoder"
         
-        computeEncoder.pushDebugGroup("Render")
+        renderEncoder.pushDebugGroup("Render")
         
         // set the pipeline state
         renderEncoder.setRenderPipelineState(_waterfallPipelineState)
-
-        // bind the bytes containing the vertices
-        let size = MemoryLayout.stride(ofValue: _waterfallVertices[0])
-        renderEncoder.setVertexBytes(&_waterfallVertices, length: size * _waterfallVertices.count, index: 0)
-
+        
+        // bind the buffer containing the vertices
+        renderEncoder.setVertexBuffer(_waterfallVerticesBuffers[_bufferIndex], offset: 0, index: 0)
+        
         // bind the Draw texture
         renderEncoder.setFragmentTexture(_drawTexture, index: 0)
         
@@ -211,15 +238,28 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         
         // Draw the triangles
         renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: _waterfallVertices.count)
-
+        
         // finish using the Render encoder
         renderEncoder.endEncoding()
         
         // present the drawable to the screen
         cmdBuffer.present(drawable)
         
+        cmdBuffer.addCompletedHandler() { _ in
+            self._bufferSemaphore.signal()
+        }
+        
         // finalize rendering & push the command buffer to the GPU
         cmdBuffer.commit()
+
+    }
+    
+    /// Draw in a Metal layer
+    ///
+    public func render() {
+        
+
+        
     }
 
     // ----------------------------------------------------------------------------
@@ -233,7 +273,7 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         framebufferOnly = true
         
         // setup the clear color
-        setClearColor(NSColor(srgbRed: 0.0, green: 0.0, blue: 0.0, alpha: 1.0))
+        setClearColor(NSColor(srgbRed: 0.0, green: 1.0, blue: 0.0, alpha: 0.5))
 
         // setup a 1D texture for a Gradient
         let gradientTextureDescriptor = MTLTextureDescriptor()
@@ -252,14 +292,23 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         drawTextureDescriptor.usage = [.shaderRead, .shaderWrite]
         _drawTexture = device!.makeTexture(descriptor: drawTextureDescriptor)
         
-        // setup two 2D textures for intensity processing
+        // setup a 2D textures for intensity processing
         let intensityTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Uint,
-                                                                         width: WaterfallLayer.kTextureWidth,
-                                                                         height: WaterfallLayer.kTextureHeight,
-                                                                         mipmapped: false)
+                                                                                  width: WaterfallLayer.kTextureWidth,
+                                                                                  height: WaterfallLayer.kTextureHeight,
+                                                                                  mipmapped: false)
         intensityTextureDescriptor.usage = [.shaderRead, .shaderWrite]
         _intensityTexture = device!.makeTexture(descriptor: intensityTextureDescriptor)
 
+        // populate the array of Vertices buffers
+        let dataSize = _waterfallVertices.count * MemoryLayout.stride(ofValue: _waterfallVertices[0])
+        for _ in 0..<WaterfallLayer.kMaxBuffers {
+            // create a Vertices buffer
+             let waterfallVerticesBuffer = device!.makeBuffer(bytes: _waterfallVertices, length: dataSize, options: [.storageModeShared])
+            
+            _waterfallVerticesBuffers.append( waterfallVerticesBuffer! )
+        }
+        
         // get the Library (contains all compiled .metal files in this project)
         let library = device!.makeDefaultLibrary()
         
@@ -323,53 +372,27 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         // vary the middle of the line to see all values of a texture and to see it is correctly positioned
         for i in WaterfallLayer.kStartingBin + 20..<WaterfallLayer.kStartingBin + 80 {
             
-            _line0[i] = incr * 15        // blue
+            _intensityValues[i] = incr * 15        // blue
         }
         for i in WaterfallLayer.kStartingBin + 80..<WaterfallLayer.kStartingBin + 160 {
             
-            _line0[i] = incr * 25        // cyan
+            _intensityValues[i] = incr * 25        // cyan
         }
         for i in WaterfallLayer.kStartingBin + 160..<WaterfallLayer.kStartingBin + 240 {
             
-            _line0[i] = incr * 35        // green
+            _intensityValues[i] = incr * 35        // green
         }
         for i in WaterfallLayer.kStartingBin + 240..<WaterfallLayer.kStartingBin + 300 {
             
-            _line0[i] = incr * 55        // yellow
+            _intensityValues[i] = incr * 55        // yellow
         }
         for i in WaterfallLayer.kStartingBin + 300..<WaterfallLayer.kStartingBin + 360 {
             
-            _line0[i] = incr * 90        // red
+            _intensityValues[i] = incr * 90        // red
         }
         for i in WaterfallLayer.kStartingBin + 360..<WaterfallLayer.kStartingBin + 420 {
             
-            _line0[i] = UInt16.max       // white
-        }
-        
-
-        for i in WaterfallLayer.kStartingBin + 20..<WaterfallLayer.kStartingBin + 80 {
-            
-            _line1[i] = incr * 15        // blue
-        }
-        for i in WaterfallLayer.kStartingBin + 80..<WaterfallLayer.kStartingBin + 160 {
-            
-            _line1[i] = incr * 25        // cyan
-        }
-        for i in WaterfallLayer.kStartingBin + 160..<WaterfallLayer.kStartingBin + 240 {
-            
-            _line1[i] = incr * 35        // green
-        }
-        for i in WaterfallLayer.kStartingBin + 240..<WaterfallLayer.kStartingBin + 300 {
-            
-            _line1[i] = incr * 55        // yellow
-        }
-        for i in WaterfallLayer.kStartingBin + 300..<WaterfallLayer.kStartingBin + 360 {
-            
-            _line1[i] = incr * 90        // red
-        }
-        for i in WaterfallLayer.kStartingBin + 360..<WaterfallLayer.kStartingBin + 420 {
-            
-            _line1[i] = UInt16.max       // white
+            _intensityValues[i] = UInt16.max       // white
         }
    }
     /// Set the Metal clear color
@@ -419,33 +442,24 @@ public final class WaterfallLayer: CAMetalLayer, CALayerDelegate {
         }
         
         // set y coordinates of the top of the texture (in clip space, i.e. 0.0 to 1.0)
-        let topIndex = Float(_textureIndex)                                 // index into texture
+        let topIndex = Float(_textureTopLine)                                 // index into texture
         let topSide = topIndex / Float(WaterfallLayer.kTextureHeight - 1)   // clip space value for index
         _waterfallVertices[3].texCoord.y = topSide                          // clip space value for top right y
         _waterfallVertices[1].texCoord.y = topSide                          // clip space value for top left y
         
         // set y coordinates of the bottom of the texture (in clip space, i.e. 0.0 to 1.0)
-        let bottomIndex = Float(_textureIndex) + Float(frame.height - 1)    // index into texture
+        let bottomIndex = Float(_textureTopLine) + Float(frame.height - 1)    // index into texture
         let bottomSide = bottomIndex / Float(WaterfallLayer.kTextureHeight - 1) // clip space value for index
         _waterfallVertices[2].texCoord.y = bottomSide                       // clip space value for bottom right y
         _waterfallVertices[0].texCoord.y = bottomSide                       // clip space value for bottom left y
         
-        // get a pointer to the line of data (intensities)
-        let currentLine = ( _lineIndex == 0 ? _line0 : _line1 )
-        let uint8Ptr = UnsafeRawPointer(currentLine).bindMemory(to: UInt8.self, capacity: WaterfallLayer.kNumberOfBins * MemoryLayout<UInt16>.size)
-        
-        // copy the data (intensities) into the texture
-        let region = MTLRegionMake2D(0, _textureIndex, WaterfallLayer.kNumberOfBins, 1)
-        _intensityTexture!.replace(region: region, mipmapLevel: 0, withBytes: uint8Ptr, bytesPerRow: WaterfallLayer.kTextureWidth * MemoryLayout<UInt16>.size)
-        
-        // toggle the Line index
-        _lineIndex = (_lineIndex + 1) % 2
-        
-        // decrement the index (the texture line that is currently the "top" line on the display)
-        _textureIndex = ( _textureIndex == 0 ? WaterfallLayer.kTextureHeight - 1 : _textureIndex - 1 )
+        // decrement the texture line that is used as the "top" line of the display
+        _textureTopLine = ( _textureTopLine == 0 ? WaterfallLayer.kTextureHeight - 1 : _textureTopLine - 1 )
 
-        autoreleasepool {
-            self.render()
-        }
+        populateBuffers()
+
+        convertIntensity()
+        
+        draw()
     }
 }
